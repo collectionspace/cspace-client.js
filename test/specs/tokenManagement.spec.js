@@ -10,8 +10,10 @@ const clientConfig = {
 };
 
 const sessionConfig = {
-  username: 'user@collectionspace.org',
-  password: 'secret',
+  authCode: 'abcd',
+  clientId: 'cpace-ui',
+  codeVerifier: '123',
+  redirectUri: '/authorized',
 };
 
 let accessToken;
@@ -42,7 +44,7 @@ describe(`token management on ${clientConfig.url}`, function suite() {
       .be.rejected
   ));
 
-  it('reuses the stored token in a new session with no user', () => {
+  it('reuses the stored token in a new session with no auth code', () => {
     const newSession = cspace.session();
 
     return newSession.read('something').should.eventually
@@ -50,9 +52,9 @@ describe(`token management on ${clientConfig.url}`, function suite() {
       .and.have.deep.property('data.presentedToken', accessToken);
   });
 
-  it('does not reuse the stored token in a new session with a different user', () => {
+  it('does not reuse the stored token in a new session with an auth code', () => {
     const newSession = cspace.session({
-      username: 'somebody@collectionspace.org',
+      authCode: 'xyz',
     });
 
     return newSession.read('something').should.eventually

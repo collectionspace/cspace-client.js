@@ -14,31 +14,23 @@ describe('session', () => {
 
     it('should set default options', () => {
       session().config().should.deep.equal({
-        username: '',
+        authCode: '',
+        codeVerifier: '',
+        redirectUri: '',
       });
     });
 
     it('should override default options with passed options', () => {
       const config = {
-        username: 'user@collectionspace.org',
-        password: 'secret',
+        authCode: 'abcd',
+        codeVerifier: '123',
+        redirectUri: '/authorized',
       };
 
       session(config).config().should.deep.equal({
-        username: 'user@collectionspace.org',
-      });
-    });
-  });
-
-  describe('#config()', () => {
-    it('should omit the password', () => {
-      const config = {
-        username: 'user@collectionspace.org',
-        password: 'secret',
-      };
-
-      session(config).config().should.deep.equal({
-        username: 'user@collectionspace.org',
+        authCode: 'abcd',
+        codeVerifier: '123',
+        redirectUri: '/authorized',
       });
     });
   });

@@ -1,5 +1,14 @@
 /* global globalThis */
 
+// These integration tests are disabled as of version 2.0.0, because they require authenticating as
+// a reader and an administrator. Since we now use the OAuth authorization code grant instead of
+// the password grant, user authentication is no longer the responsibility (or know-how) of this
+// package. These tests should be done at a higher level, probably as Selenium tests of the CSpace
+// UI.
+//
+// These tests could potentially be restored if we add support for long-lived API tokens associated
+// with users.
+
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import client from '../../src/client';
@@ -29,7 +38,13 @@ const readerSessionConfig = {
   password: 'reader',
 };
 
-describe(`crud operations on ${clientConfig.url}`, function suite() {
+describe('Disabled tests', () => {
+  it('should do nothing', () => {
+    // This is just here to keep npm test happy, since all the actual tests are disabled (skipped).
+  });
+});
+
+describe.skip(`crud operations on ${clientConfig.url}`, function suite() {
   this.timeout(20000);
 
   const cspace = client(clientConfig);

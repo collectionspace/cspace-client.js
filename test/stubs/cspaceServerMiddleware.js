@@ -6,7 +6,13 @@ const sendJson = require('send-data/json');
 const delay = 500;
 
 /**
- * Counter to ensure uniqueness of tokens on each grant.
+ * The access token to return. This is a valid JWT token, without a signature.
+ */
+const jwtTokenBase = 'eyJraWQiOiJlZWY2OGZmMC0yNWFjLTRkYzUtYTY3NS04ZjIzY2FiYzJmODciLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhZG1pbkBjb3JlLmNvbGxlY3Rpb25zcGFjZS5vcmciLCJhdWQiOiJjc3BhY2UtdWkiLCJuYmYiOjE2OTQ4NDA5ODUsInNjb3BlIjpbImNzcGFjZS5mdWxsIl0sImlzcyI6Imh0dHA6Ly9sb2NhbGhvc3Q6ODE4MC9jc3BhY2Utc2VydmljZXMiLCJleHAiOjE2OTQ4NDEwMTUsImlhdCI6MTY5NDg0MDk4NX0';
+
+/**
+ * Counter to ensure uniqueness of tokens on each grant. This is appended to tokenBase as a
+ * "signature".
  */
 let tokenNum = 0;
 
@@ -25,27 +31,31 @@ let tokenNum = 0;
  * for example by adding it to the npm test script in package.json.
  */
 module.exports = function cspaceServerMiddleware(req, res, next) {
-  if (req.method === 'POST' && req.url === '/cspace-services/oauth/token') {
-    // Simulate an OAuth2 password credentials grant or refresh token grant on a POST to the token
+  if (req.method === 'POST' && req.url === '/cspace-services/oauth2/token') {
+    // Simulate an OAuth2 authorization code grant or refresh token grant on a POST to the token
     // endpoint.
 
-    // If the grant type is 'password', a token is granted as long as the username and password
-    // are truthy. If the grant type is 'refresh_token', a token is granted as long as the refresh
-    // token is truthy. An artificial delay is introduced before replying, in order to make testing
-    // of multiple simultaneous requests easy.
+    // If the grant type is 'authorization_code', a token is granted as long as the code, code
+    // verifier, client id, and redirect URI  are truthy. If the grant type is 'refresh_token', a
+    // token is granted as long as the refresh token is truthy. An artificial delay is introduced
+    // before replying, in order to make testing of multiple simultaneous requests easy.
 
     // The granted tokens are returned along with the request body so that it can be verified.
 
     let accept = false;
     const grantType = req.body.grant_type;
 
-    if (grantType === 'password') {
+    if (grantType === 'authorization_code') {
+      /* eslint-disable camelcase */
       const {
-        username,
-        password,
+        client_id,
+        code,
+        code_verifier,
+        redirect_uri,
       } = req.body;
 
-      accept = username && password;
+      accept = client_id && code && code_verifier && redirect_uri;
+      /* eslint-enable camelcase */
     } else if (grantType === 'refresh_token') {
       const token = req.body.refresh_token;
 
@@ -59,7 +69,7 @@ module.exports = function cspaceServerMiddleware(req, res, next) {
         sendJson(req, res, {
           statusCode: 200,
           body: {
-            access_token: `access_${tokenNum}`,
+            access_token: `${jwtTokenBase}.${tokenNum}`,
             refresh_token: `refresh_${tokenNum}`,
             request_body: req.body,
           },

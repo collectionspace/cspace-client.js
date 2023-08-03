@@ -1,24 +1,12 @@
-/* global window */
-
 import cspace from 'cspace-api';
 import urljoin from 'url-join';
 import tokenStore from './tokenStore';
+import { parseJwt } from './tokenHelpers';
 
 const defaultSessionConfig = {
-  username: '',
-  password: '',
-};
-
-const base64Encode = (value) => {
-  if (typeof value === 'undefined' || value === null) {
-    return value;
-  }
-
-  if (typeof window !== 'undefined') {
-    return window.btoa(value);
-  }
-
-  return Buffer.from(value).toString('base64');
+  authCode: '',
+  codeVerifier: '',
+  redirectUri: '',
 };
 
 export default function session(sessionConfig) {
@@ -30,19 +18,12 @@ export default function session(sessionConfig) {
   const authStore = tokenStore(config.clientId, config.url);
 
   let authRequestPending = null;
-  let auth = authStore.fetch() || {};
+  let auth = {};
 
-  if (config.username) {
-    // The username for this session was specified, and differs from the stored auth user.
-    // Don't use the stored auth.
+  if (!config.authCode) {
+    // The auth code for this session wasn't specified. Use the stored auth, if any.
 
-    if (config.username !== auth.username) {
-      auth = {};
-    }
-  } else if (auth.username) {
-    // The username for this session was not specified. Use the stored auth user, if one exists.
-
-    config.username = auth.username;
+    auth = authStore.fetch() || {};
   }
 
   const cs = cspace({
@@ -50,24 +31,39 @@ export default function session(sessionConfig) {
   });
 
   const csAuth = cspace({
-    url: urljoin(config.url, 'cspace-services/oauth'),
-    username: config.clientId,
-    password: config.clientSecret,
+    url: urljoin(config.url, 'cspace-services/oauth2'),
     type: 'application/x-www-form-urlencoded',
+    ...(config.clientSecret ? {
+      username: config.clientId,
+      password: config.clientSecret,
+    } : undefined),
   });
 
   const storeToken = (response) => {
+    const {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    } = response.data;
+
+    const jwt = parseJwt(accessToken);
+
+    const {
+      sub: username,
+    } = jwt;
+
     auth = {
-      username: config.username,
-      accessToken: response.data.access_token,
-      refreshToken: response.data.refresh_token,
+      username,
+      accessToken,
+      refreshToken,
     };
 
     authStore.store(auth);
 
-    // We have tokens, so the user password can be discarded.
+    // We have tokens, so the authoriztion code, code verifier, and client secret can be discarded.
 
-    delete config.password;
+    delete config.authCode;
+    delete config.codeVerifier;
+    delete config.clientSecret;
 
     return response;
   };
@@ -89,9 +85,11 @@ export default function session(sessionConfig) {
   };
 
   const login = () => authRequest({
-    grant_type: 'password',
-    username: config.username,
-    password: base64Encode(config.password),
+    grant_type: 'authorization_code',
+    code: config.authCode,
+    redirect_uri: config.redirectUri,
+    client_id: config.clientId,
+    code_verifier: config.codeVerifier,
   });
 
   const refresh = () => authRequest({
@@ -99,21 +97,18 @@ export default function session(sessionConfig) {
     refresh_token: auth.refreshToken,
   });
 
-  const logout = () => new Promise((resolve) => {
-    // Log out may in the future require an async call to the REST API (for example, to revoke
-    // tokens immediately). Currently it's a client-side only operation that can be done
-    // synchronously, but to be consistent with a future async operation, we'll simulate it with
-    // setTimeout.
+  const logout = (serviceLogout = true) => new Promise((resolve) => {
+    const serviceLogoutPromise = serviceLogout
+      ? cs.create('logout')
+      : Promise.resolve();
 
-    setTimeout(() => {
-      delete config.username;
-      delete config.password;
+    return serviceLogoutPromise
+      .finally(() => {
+        auth = {};
+        authStore.clear();
 
-      auth = {};
-      authStore.clear();
-
-      resolve({});
-    });
+        resolve({});
+      });
   });
 
   const tokenizeRequest = (requestConfig) => {
@@ -151,7 +146,7 @@ export default function session(sessionConfig) {
   );
 
   return {
-    config() {
+    config: () => {
       const configCopy = { ...config };
 
       delete configCopy.clientSecret;
@@ -159,6 +154,7 @@ export default function session(sessionConfig) {
 
       return configCopy;
     },
+    username: () => (auth ? auth.username : null),
     login,
     logout,
     create: tokenized('create'),
